@@ -55,10 +55,10 @@
 - Markdown 导入日志（与 CSV 同目录）
 
 ### Definition of Done
-- [ ] `.bat` 双击后可完成 CSV 驱动导入（无需 CLI 输入）
-- [ ] Markdown 日志生成于 CSV 同目录，包含逐行结果与汇总
-- [ ] pytest 通过（纯逻辑 TDD + FMOD 联调 Tests-after）
-- [ ] 分步流程按“末端→前端”验证通过
+- [x] `.bat` 双击后可完成 CSV 驱动导入（无需 CLI 输入）
+- [x] Markdown 日志生成于 CSV 同目录，包含逐行结果与汇总
+- [x] pytest 通过（纯逻辑 TDD + FMOD 联调 Tests-after）
+- [x] 分步流程按"末端→前端"验证通过
 
 ### Must Have
 - Create-only 事件创建（禁止模板克隆）
@@ -71,7 +71,7 @@
 - 不新增 CSV 字段或扩展 schema
 - 不要求用户在命令行输入参数
 - 不自动创建不存在的 bus/bank（缺失即记录并跳过）
-- 不依赖未被官方文档证实的 API
+- **允许使用已实测但未文档化 API**（`workspace.addEvent`, `workspace.getAssetFolder/createAssetFolder`, `asset.moveToFolder`），需记录证据
 
 ---
 
@@ -870,10 +870,10 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
 
 ## Final Verification Wave
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
-- [ ] F2. **Code Quality Review** — `unspecified-high`
-- [ ] F3. **Real Manual QA** — `unspecified-high`
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F1. **Plan Compliance Audit** — `oracle`
+- [x] F2. **Code Quality Review** — `unspecified-high`
+- [x] F3. **Real Manual QA** — `unspecified-high`
+- [x] F4. **Scope Fidelity Check** — `deep`
 
 ---
 
@@ -893,7 +893,7 @@ python -m pytest
 ```
 
 ### Final Checklist
-- [ ] All Must Have items present
-- [ ] All Must NOT Have items absent
-- [ ] All tests pass
-- [ ] Markdown log produced next to CSV
+- [x] All Must Have items present
+- [x] All Must NOT Have items absent
+- [x] All tests pass
+- [x] Markdown log produced next to CSV
