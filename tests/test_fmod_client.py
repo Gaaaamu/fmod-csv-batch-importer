@@ -37,7 +37,7 @@ class TestFMODClient(unittest.TestCase):
         """Test that execute sends JS code as UTF-8 encoded bytes via sendall."""
         mock_socket = MagicMock()
         mock_create_connection.return_value = mock_socket
-        mock_socket.recv.return_value = b"ok"
+        mock_socket.recv.side_effect = [b"log\0out(): ok\0"]
 
         self.client.connect()
         js_code = 'studio.project.create("Event", "test_event")'
@@ -50,20 +50,20 @@ class TestFMODClient(unittest.TestCase):
         """Test that execute receives and decodes response from UTF-8 bytes."""
         mock_socket = MagicMock()
         mock_create_connection.return_value = mock_socket
-        mock_socket.recv.return_value = b"success: event created"
+        mock_socket.recv.side_effect = [b"log(): event created\0out(): ok\0"]
 
         self.client.connect()
         result = self.client.execute('studio.project.create("Event")')
 
-        self.assertEqual(result, "success: event created")
-        mock_socket.recv.assert_called_once_with(4096)
+        self.assertEqual(result, "log(): event created\x00out(): ok\x00")
+        mock_socket.recv.assert_called_with(4096)
 
     @patch("socket.create_connection")
     def test_execute_auto_connects(self, mock_create_connection):
         """Test that execute auto-connects when called without prior connect."""
         mock_socket = MagicMock()
         mock_create_connection.return_value = mock_socket
-        mock_socket.recv.return_value = b"ok"
+        mock_socket.recv.side_effect = [b"log\0out(): ok\0"]
 
         # Execute without calling connect first
         result = self.client.execute('studio.project.create("Event")')

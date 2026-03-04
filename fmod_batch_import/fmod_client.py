@@ -22,10 +22,25 @@ class FMODClient:
         if self._socket is None:
             return None
         try:
+            self._socket.settimeout(10.0)
             self._socket.sendall(js_code.encode("utf-8"))
-            response = self._socket.recv(4096)
+            chunks = []
+            total_nulls = 0
+            while True:
+                try:
+                    chunk = self._socket.recv(4096)
+                except socket.timeout:
+                    break
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total_nulls += chunk.count(b'\0')
+                if total_nulls >= 2:
+                    break
+            self._socket.settimeout(None)
+            response = b''.join(chunks)
             return response.decode("utf-8")
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, socket.timeout):
             return None
 
     def close(self) -> None:
