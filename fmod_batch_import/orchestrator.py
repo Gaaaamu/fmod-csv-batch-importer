@@ -14,6 +14,9 @@ Rules:
 
 import json
 import os
+import re
+from dataclasses import dataclass, field
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -142,8 +145,15 @@ class Orchestrator:
         response = self.client.execute(js)
         if response is None:
             raise FMODConnectionError("FMOD TCP connection lost")
+        # Extract JSON from out(): lines
+        # FMOD response format: log(): ...\n\0out(): {json}\n\n\0
+        match = re.search(r'out\(\):\s*(\{.*\})', response, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+        else:
+            json_str = response.strip()
         try:
-            return json.loads(response.strip())
+            return json.loads(json_str)
         except json.JSONDecodeError:
             return {"ok": False, "error": f"Non-JSON response: {response[:200]}"}
 
