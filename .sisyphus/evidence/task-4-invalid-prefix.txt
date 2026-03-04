@@ -1,0 +1,17 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\24517\AppData\Local\Programs\Python\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\WORKSPACE\Workspace\AD PJ\AI\Fmod Batch Event Process
+configfile: pyproject.toml
+plugins: anyio-4.12.0, mock-3.15.1
+collecting ... collected 7 items
+
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_event_path_with_bus_prefix PASSED [ 14%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_event_path_with_bank_prefix PASSED [ 28%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_event_path_with_vca_prefix PASSED [ 42%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_bus_path_with_event_prefix PASSED [ 57%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_bus_path_with_bank_prefix PASSED [ 71%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_bank_path_with_event_prefix PASSED [ 85%]
+tests/test_path_normalization.py::TestInvalidPrefixRejection::test_bank_path_with_bus_prefix PASSED [100%]
+
+============================== 7 passed in 0.03s ==============================

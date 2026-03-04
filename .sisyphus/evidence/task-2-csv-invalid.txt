@@ -1,0 +1,63 @@
+# Task 2: CSV Schema Parsing - Invalid Examples
+# Generated: 2026-03-04
+
+## Summary
+CSV parser correctly rejects invalid CSV files.
+Strict schema enforcement: exactly 5 columns required.
+
+## Invalid CSV Examples
+
+### Error 1: Too Few Columns in Header
+CSV:
+  audio_path,event_path,asset_path,bus_path
+
+Error: CSV Error at row 1: Header has 4 columns, expected 5
+
+### Error 2: Too Many Columns in Header
+CSV:
+  audio_path,event_path,asset_path,bus_path,bank_name,extra_column
+
+Error: CSV Error at row 1: Header has 6 columns, expected 5
+
+### Error 3: Wrong Column Names
+CSV:
+  wrong_path,event_path,asset_path,bus_path,bank_name
+
+Error: CSV Error at row 1: Invalid header. Expected: ['audio_path', 'event_path', 'asset_path', 'bus_path', 'bank_name'], Got: ['wrong_path', ...]
+
+### Error 4: Data Row with Wrong Column Count
+CSV:
+  audio_path,event_path,asset_path,bus_path,bank_name
+  /path/to/audio.wav,/event/path,/asset/path,/bus/path
+
+Error: CSV Error at row 2: Row has 4 columns, expected 5
+
+### Error 5: Trailing Comma (Creates Extra Column)
+CSV:
+  audio_path,event_path,asset_path,bus_path,bank_name
+  /path/to/audio.wav,/event/path,/asset/path,/bus/path,Master,
+
+Error: CSV Error at row 2: Row has 6 columns, expected 5
+
+### Error 6: Missing Header Row
+CSV:
+  /path/to/audio.wav,/event/path,/asset/path,/bus/path,Master
+
+Error: CSV Error: Missing header row
+
+### Error 7: Empty File
+CSV:
+  (empty)
+
+Error: CSV Error: File is empty
+
+## Validation Features
+- ✓ Strict column count validation (exactly 5 columns)
+- ✓ Header name validation
+- ✓ Data row column count validation
+- ✓ Empty file detection
+- ✓ Missing header detection
+- ✓ Informative error messages with row numbers
+
+## Test Results
+All validation tests passed (9 rejection tests).
