@@ -636,7 +636,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-10-attach-missing.txt
   ```
 
-- [ ] 11. Orchestrator: row‑by‑row execution + error handling
+- [x] 11. Orchestrator: row‑by‑row execution + error handling
 
   **What to do**:
   - Orchestrate the full CSV flow: resolve audio → **pre-check bus/bank** → import asset → create event → bind sound → attach bus/bank → log result
@@ -684,7 +684,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-11-tcp-fail.txt
   ```
 
-- [ ] 12. GUI dialog flow + FMOD launch/reconnect
+- [x] 12. GUI dialog flow + FMOD launch/reconnect
 
   **What to do**:
   - Provide GUI dialogs to select CSV, audio directory, and optional FMOD project
@@ -728,7 +728,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-12-dialog-cancel.txt
   ```
 
-- [ ] 13. .bat entrypoint (no CLI input)
+- [x] 13. .bat entrypoint (no CLI input)
 
   **What to do**:
   - Provide `.bat` that invokes python entry (no arguments)
@@ -772,7 +772,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-13-bat-shell.txt
   ```
 
-- [ ] 14. Markdown report integration + export
+- [x] 14. Markdown report integration + export
 
   **What to do**:
   - Integrate log writer into orchestrator
@@ -817,7 +817,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-14-log-summary.txt
   ```
 
-- [ ] 15. Stepwise integration tests (end → start)
+- [x] 15. Stepwise integration tests (end → start)
 
   **What to do**:
   - Implement integration test sequence:
