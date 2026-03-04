@@ -17,14 +17,15 @@ def _esc(value: str) -> str:
 
 
 def js_create_event(event_path: str) -> str:
-    """Generate JS to create an event and return its GUID."""
+    """Generate JS to create an event via workspace.addEvent and return its GUID.
+    Uses workspace.addEvent(name, withSpatializer) - verified against FMOD 2.02.07.
+    """
     safe = _esc(event_path)
     return (
         f"(function(){{"
-        f"var e=studio.project.create('Event');"
-        f"if(!e)return JSON.stringify({{ok:false,id:null,error:'create null'}});"
-        f"e.name='{safe}'.split('/').pop();"
-        f"studio.project.workspace.masterEventFolder.items.add(e);"
+        f"var name='{safe}'.split('/').pop();"
+        f"var e=studio.project.workspace.addEvent(name, false);"
+        f"if(!e)return JSON.stringify({{ok:false,id:null,error:'addEvent returned null'}});"
         f"return JSON.stringify({{ok:true,id:e.id,error:null}});"
         f"}})();"
     )
@@ -53,7 +54,7 @@ def js_add_sound(track_id: str, asset_id: str) -> str:
         f"(function(){{"
         f"var tr=studio.project.lookup('{safe_t}');"
         f"if(!tr)return JSON.stringify({{ok:false,sound_id:null,error:'Track not found'}});"
-        f"var snd=tr.addSound(studio.project.workspace.masterParameterPreset,'SingleSound',0,1);"
+        f"var snd=tr.addSound(null,'SingleSound',0,1);"
         f"if(!snd)return JSON.stringify({{ok:false,sound_id:null,error:'addSound null'}});"
         f"var asset=studio.project.lookup('{safe_a}');"
         f"if(asset)snd.audioFile=asset;"
@@ -84,7 +85,7 @@ def js_assign_bus(event_id: str, bus_id: str) -> str:
         f"if(!ev)return JSON.stringify({{ok:false,error:'Event not found'}});"
         f"var bus=studio.project.lookup('{safe_b}');"
         f"if(!bus)return JSON.stringify({{ok:false,error:'Bus not found'}});"
-        f"ev.masterTrack.mixerGroup.output.add(bus);"
+        f"ev.masterTrack.mixerGroup.relationships.output.add(bus);"
         f"return JSON.stringify({{ok:true,error:null}});"
         f"}})();"
     )
@@ -100,14 +101,14 @@ def js_assign_bank(event_id: str, bank_id: str) -> str:
         f"if(!ev)return JSON.stringify({{ok:false,error:'Event not found'}});"
         f"var bk=studio.project.lookup('{safe_bk}');"
         f"if(!bk)return JSON.stringify({{ok:false,error:'Bank not found'}});"
-        f"bk.items.add(ev);"
+        f"ev.relationships.banks.add(bk);"
         f"return JSON.stringify({{ok:true,error:null}});"
         f"}})();"
     )
 
 
 def js_lookup(path: str) -> str:
-    """Generate JS to lookup any object by path or GUID. Returns JSON with ok/id."""
+    """Generate JS to lookup any object by path or GUID. Returns JSON with ok/id/error."""
     safe = _esc(path)
     return (
         f"(function(){{"

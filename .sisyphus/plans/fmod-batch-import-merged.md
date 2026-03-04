@@ -147,7 +147,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
 
 ## TODOs
 
-- [ ] 1. Scaffold project structure + pytest configuration
+- [x] 1. Scaffold project structure + pytest configuration
 
   **What to do**:
   - Create Python package layout: `fmod_batch_import/`, `debug/`, `tests/`
@@ -198,7 +198,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-1-layout.txt
   ```
 
-- [ ] 2. CSV schema parsing + validation (TDD)
+- [x] 2. CSV schema parsing + validation (TDD)
 
   **What to do**:
   - Implement CSV reader enforcing fixed 5 columns: `audio_path, event_path, asset_path, bus_path, bank_name`
@@ -247,7 +247,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-2-csv-invalid.txt
   ```
 
-- [ ] 3. Audio resolver with strict matching rules (TDD)
+- [x] 3. Audio resolver with strict matching rules (TDD)
 
   **What to do**:
   - Implement audio resolution using strict rules:
@@ -298,7 +298,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-3-audio-duplicates.txt
   ```
 
-- [ ] 4. Path normalization + CSV row mapping (TDD)
+- [x] 4. Path normalization + CSV row mapping (TDD)
 
   **What to do**:
   - Normalize `event_path` / `bus_path` / `bank_name` using FMOD path rules
@@ -347,7 +347,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-4-invalid-prefix.txt
   ```
 
-- [ ] 5. Markdown log builder + summary stats (TDD)
+- [x] 5. Markdown log builder + summary stats (TDD)
 
   **What to do**:
   - Define Markdown log structure: header, per-row results, warnings, summary totals
@@ -395,7 +395,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-5-log-summary.txt
   ```
 
-- [ ] 6. FMOD TCP client + verify probe script
+- [x] 6. FMOD TCP client + verify probe script
 
   **What to do**:
   - Implement TCP client for FMOD Scripting server (port 3663)
@@ -442,7 +442,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-6-probe-success.txt
   ```
 
-- [ ] 7. ManagedObject discovery + relationship map output
+- [x] 7. ManagedObject discovery + relationship map output
 
   **What to do**:
   - Implement discovery script to introspect ManagedObject properties/relationships
@@ -488,7 +488,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-7-discovery-fail.txt
   ```
 
-- [ ] 8. Create‑only JS builder (event/track/sound)
+- [x] 8. Create‑only JS builder (event/track/sound)
 
   **What to do**:
   - Build JS script generator that:
@@ -539,7 +539,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-8-js-api.txt
   ```
 
-- [ ] 9. Audio import + asset folder routing
+- [x] 9. Audio import + asset folder routing
 
   **What to do**:
   - Use `studio.project.importAudioFile(filePath)` (absolute path)
@@ -587,7 +587,7 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
     Evidence: .sisyphus/evidence/task-9-import-fail.txt
   ```
 
-- [ ] 10. Bus/Bank lookup + relationship assignment
+- [x] 10. Bus/Bank lookup + relationship assignment
 
   **What to do**:
   - Lookup bus/bank via `project.lookup('bus:/...')` and `project.lookup('bank:/...')`

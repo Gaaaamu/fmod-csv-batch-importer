@@ -48,10 +48,7 @@ def main() -> int:
     finally:
         if client is not None:
             try:
-            try:
-                client.disconnect()
-            except Exception:
-                pass
+                client.close()
             except Exception:
                 pass
 
