@@ -45,7 +45,10 @@ class LogWriter:
         audio_file: str,
         event_path: str,
         status: str,
-        message: str = ""
+        message: str = "",
+        defaults_applied: str = "",
+        inheritance_source: str = "",
+        template_used: str = ""
     ) -> None:
         """Log the result of processing a single row.
         
@@ -55,13 +58,19 @@ class LogWriter:
             event_path: FMOD event path
             status: One of 'success', 'skip', 'fail'
             message: Optional message (e.g., error details)
+            defaults_applied: Comma-separated list of default values applied
+            inheritance_source: Source of inherited values (e.g., parent event)
+            template_used: Name of template used for this row
         """
         self.rows.append({
             "row": row_num,
             "audio": audio_file,
             "event": event_path,
             "status": status,
-            "message": message
+            "message": message,
+            "defaults_applied": defaults_applied,
+            "inheritance_source": inheritance_source,
+            "template_used": template_used
         })
         
         self.total_count += 1
@@ -95,16 +104,19 @@ class LogWriter:
         lines = [
             "## Results",
             "",
-            "| Row | Audio | Event | Status | Message |",
-            "|-----|-------|-------|--------|---------|"
+            "| Row | Audio | Event | Status | Message | Defaults Applied | Inheritance Source | Template Used |",
+            "|-----|-------|-------|--------|---------|------------------|-------------------|---------------|"
         ]
         
         for row in self.rows:
-            # Escape pipe characters in messages
+            # Escape pipe characters in messages and other fields
             message = row["message"].replace("|", "\\|")
+            defaults = str(row.get("defaults_applied", "")).replace("|", "\\|")
+            inheritance = str(row.get("inheritance_source", "")).replace("|", "\\|")
+            template = str(row.get("template_used", "")).replace("|", "\\|")
             lines.append(
                 f"| {row['row']} | `{row['audio']}` | `{row['event']}` | "
-                f"{row['status']} | {message} |"
+                f"{row['status']} | {message} | {defaults} | {inheritance} | {template} |"
             )
         
         lines.append("")

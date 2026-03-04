@@ -54,13 +54,15 @@ def js_add_sound(track_id: str, asset_id: str) -> str:
         f"(function(){{"
         f"var tr=studio.project.lookup('{safe_t}');"
         f"if(!tr)return JSON.stringify({{ok:false,sound_id:null,error:'Track not found'}});"
-        f"var snd=tr.addSound(null,'SingleSound',0,1);"
-        f"if(!snd)return JSON.stringify({{ok:false,sound_id:null,error:'addSound null'}});"
         f"var asset=studio.project.lookup('{safe_a}');"
-        f"if(asset)snd.audioFile=asset;"
+        f"if(!asset)return JSON.stringify({{ok:false,sound_id:null,error:'Asset not found'}});"
+        f"var snd=tr.addSound(tr.event.timeline,'SingleSound',0,asset.length);"
+        f"if(!snd)return JSON.stringify({{ok:false,sound_id:null,error:'addSound null'}});"
+        f"snd.audioFile=asset;"
         f"return JSON.stringify({{ok:true,sound_id:snd.id,error:null}});"
         f"}})();"
     )
+
 
 
 def js_import_audio(file_path: str) -> str:

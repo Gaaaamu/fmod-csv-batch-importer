@@ -204,7 +204,34 @@ class TestEmptyFieldValidation:
         assert "audio_path" in str(exc_info.value)
         assert "Row 5" in str(exc_info.value)
     
-    def test_empty_event_path_in_row_raises_error(self):
+    def test_empty_event_path_in_row_gets_default(self):
+        """Empty event_path in row should get default from template + audio name."""
+        result = self.normalizer.normalize_row(
+            audio_path="sounds/gunshot.wav",
+            event_path="",
+            row_index=10
+        )
+        
+        # Should auto-generate event_path using template folder + audio name
+        assert "event:/" in result.event_path
+        assert "gunshot" in result.event_path
+        assert "event_path default applied" in result.warnings[0]
+    
+    def test_empty_optional_fields_get_defaults(self):
+        """Empty optional fields (bus, bank) should get defaults."""
+        result = self.normalizer.normalize_row(
+            audio_path="sounds/gunshot.wav",
+            event_path="event:/sfx/gunshot",
+            bus_path="",
+            bank_name="",
+            row_index=1
+        )
+        
+        # Should get default bus and bank
+        assert result.bus_path == "bus:/"
+        assert result.bank_name == "bank:/Master"
+        assert any("bus_path fallback applied" in w for w in result.warnings)
+        assert any("bank_name fallback applied" in w for w in result.warnings)
         """Empty event_path in row should raise validation error."""
         with pytest.raises(PathValidationError) as exc_info:
             self.normalizer.normalize_row(
@@ -401,3 +428,5 @@ class TestValidatePrefix:
         """Empty path should return True."""
         result = self.normalizer.validate_prefix("", "event")
         assert result is True
+
+
