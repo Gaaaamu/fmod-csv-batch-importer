@@ -253,13 +253,75 @@ def create_and_dump_entity_js(entity_type: str) -> str:
 """
 
 
-def explore_event_structure_js() -> str:
-    """Generate JS to explore an Event's structure deeply."""
-    return """
-(function() {
-    try {
-        var event = studio.project.create('Event');
-        if (!event) {
-            return JSON.stringify({success: false, error: "Failed to create Event"});
+def discover_entity(client: FMODClient, entity_type: str) -> Dict[str, Any]:
+    """Discover a specific entity type."""
+    print(f"Discovering {entity_type}...", file=sys.stderr)
+    
+    js = create_and_dump_entity_js(entity_type)
+    response = client.execute(js)
+    
+    if response is None:
+        return {"error": "No response from FMOD"}
+    
+    try:
+        # Parse the response - extract JSON after out():
+        import re
+        match = re.search(r'out\(\):\s*(\{.*\})', response, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+        
+        # Try parsing entire response as JSON
+        return json.loads(response.strip())
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse response: {e}",
+            "raw_response": response[:500] if response else None
         }
-  
+
+
+def main():
+    """Run the discovery process."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Discover FMOD ManagedObject structure")
+    parser.add_argument("--host", default="localhost", help="FMOD host")
+    parser.add_argument("--port", type=int, default=3663, help="FMOD port")
+    parser.add_argument("--output", type=str, default=".sisyphus/evidence/managedobject-map.json",
+                        help="Output file path")
+    args = parser.parse_args()
+    
+    client = FMODClient(args.host, args.port)
+    
+    if not client.connect():
+        print(json.dumps({
+            "success": False,
+            "error": f"Could not connect to FMOD at {args.host}:{args.port}"
+        }, indent=2))
+        sys.exit(1)
+    
+    try:
+        results = {
+            "success": True,
+            "entities": {}
+        }
+        
+        for entity_type in ENTITY_TYPES:
+            result = discover_entity(client, entity_type)
+            results["entities"][entity_type] = result
+        
+        # Save to file
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(output_path, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        print(json.dumps(results, indent=2))
+        print(f"\nResults saved to: {output_path}", file=sys.stderr)
+        
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()

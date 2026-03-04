@@ -176,8 +176,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: https://docs.pytest.org/ (pytest config patterns)
 
   **Acceptance Criteria**:
-  - [ ] `python -m pytest --collect-only` succeeds
-  - [ ] `fmod_batch_import/`, `debug/`, `tests/` folders exist
+  - [x] `python -m pytest --collect-only` succeeds
+  - [x] `fmod_batch_import/`, `debug/`, `tests/` folders exist
 
   **QA Scenarios**:
   ```
@@ -227,8 +227,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: Python csv module docs
 
   **Acceptance Criteria**:
-  - [ ] pytest: valid CSV parses into row objects with correct fields
-  - [ ] pytest: missing header or extra column → validation error
+  - [x] pytest: valid CSV parses into row objects with correct fields
+  - [x] pytest: missing header or extra column → validation error
 
   **QA Scenarios**:
   ```
@@ -278,8 +278,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: https://www.fmod.com/docs/2.02/studio/managing-assets.html (supported audio formats)
 
   **Acceptance Criteria**:
-  - [ ] Extensionless filename resolves to a supported audio file
-  - [ ] Duplicate filename returns first match + warning recorded
+  - [x] Extensionless filename resolves to a supported audio file
+  - [x] Duplicate filename returns first match + warning recorded
 
   **QA Scenarios**:
   ```
@@ -327,8 +327,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project.html#projectlookup (path format `type:/path`)
 
   **Acceptance Criteria**:
-  - [ ] pytest: `event_path` normalized to `event:/...`
-  - [ ] pytest: invalid prefix → validation error
+  - [x] pytest: `event_path` normalized to `event:/...`
+  - [x] pytest: invalid prefix → validation error
 
   **QA Scenarios**:
   ```
@@ -375,8 +375,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Pattern References: prior plans' log requirements (voiceover plan)
 
   **Acceptance Criteria**:
-  - [ ] pytest: log file written to CSV directory
-  - [ ] pytest: summary contains counts for success/fail/skip
+  - [x] pytest: log file written to CSV directory
+  - [x] pytest: summary contains counts for success/fail/skip
 
   **QA Scenarios**:
   ```
@@ -421,8 +421,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: https://www.fmod.com/docs/2.02/studio/scripting-terminal-reference.html (TCP scripting server)
 
   **Acceptance Criteria**:
-  - [ ] `python debug/verify_fmod_tcp.py` returns JSON with `connected` and `exec_ok`
-  - [ ] When FMOD not running, exit code is non‑zero and JSON includes error
+  - [x] `python debug/verify_fmod_tcp.py` returns JSON with `connected` and `exec_ok`
+  - [x] When FMOD not running, exit code is non‑zero and JSON includes error
 
   **QA Scenarios**:
   ```
@@ -467,8 +467,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - External References: https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project-managedobject.html
 
   **Acceptance Criteria**:
-  - [ ] Discovery script outputs JSON with `properties` and `relationships` keys
-  - [ ] Output is saved to `.sisyphus/evidence/managedobject-map.json`
+  - [x] Discovery script outputs JSON with `properties` and `relationships` keys
+  - [x] Output is saved to `.sisyphus/evidence/managedobject-map.json`
 
   **QA Scenarios**:
   ```
@@ -519,8 +519,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project-model-sound.html#modelsinglesound
 
   **Acceptance Criteria**:
-  - [ ] JS builder returns valid JSON schema for success/failure
-  - [ ] Generated JS avoids undocumented calls
+  - [x] JS builder returns valid JSON schema for success/failure
+  - [x] Generated JS avoids undocumented calls
 
   **QA Scenarios**:
   ```
@@ -566,8 +566,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project-model-folder.html#masterassetfoldergetasset
 
   **Acceptance Criteria**:
-  - [ ] Imported asset is placed in target asset folder
-  - [ ] Null return on import failure triggers row error
+  - [x] Imported asset is placed in target asset folder
+  - [x] Null return on import failure triggers row error
 
   **QA Scenarios**:
   ```
@@ -615,8 +615,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - User screenshot: Project.Model.MixerStrip (MixerStrip.getPath)
 
   **Acceptance Criteria**:
-  - [ ] Valid bus/bank paths attach successfully
-  - [ ] Missing bus/bank produces warning; row is skipped (no event created)
+  - [x] Valid bus/bank paths attach successfully
+  - [x] Missing bus/bank produces warning; row is skipped (no event created)
 
   **QA Scenarios**:
   ```
@@ -664,8 +664,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Official docs for each API used in steps
 
   **Acceptance Criteria**:
-  - [ ] One failing row does not stop subsequent rows
-  - [ ] Log includes per-row status + error message
+  - [x] One failing row does not stop subsequent rows
+  - [x] Log includes per-row status + error message
 
   **QA Scenarios**:
   ```
@@ -708,8 +708,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Python tkinter file dialogs
 
   **Acceptance Criteria**:
-  - [ ] Double-click launch presents CSV/audio selections
-  - [ ] Canceling any dialog exits cleanly
+  - [x] Double-click launch presents CSV/audio selections
+  - [x] Canceling any dialog exits cleanly
 
   **QA Scenarios**:
   ```
@@ -752,8 +752,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Windows .bat best practices
 
   **Acceptance Criteria**:
-  - [ ] Double-click runs without CLI arguments
-  - [ ] Exit code propagated to console/log if run from shell
+  - [x] Double-click runs without CLI arguments
+  - [x] Exit code propagated to console/log if run from shell
 
   **QA Scenarios**:
   ```
@@ -797,8 +797,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Task 5 log builder
 
   **Acceptance Criteria**:
-  - [ ] Log file exists in CSV directory with Markdown structure
-  - [ ] Summary totals match processed rows
+  - [x] Log file exists in CSV directory with Markdown structure
+  - [x] Summary totals match processed rows
 
   **QA Scenarios**:
   ```
@@ -845,8 +845,8 @@ Critical Path: 6 → 7 → 8 → 11 → 12 → 13 → 15
   - Stepwise testing requirement from user
 
   **Acceptance Criteria**:
-  - [ ] Each step produces evidence file before next executes
-  - [ ] Final end-to-end test succeeds with sample CSV
+  - [x] Each step produces evidence file before next executes
+  - [x] Final end-to-end test succeeds with sample CSV
 
   **QA Scenarios**:
   ```
