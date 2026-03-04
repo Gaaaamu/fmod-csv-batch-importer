@@ -1,0 +1,38 @@
+Task 5: GUI Updates for Template Path and Defaults
+Date: 2026-03-04
+
+1. Implemented BatchImportDialog class in fmod_batch_import/gui.py
+   - Added CSV file selection (Label + Entry + Browse)
+   - Added Audio directory selection (Label + Entry + Browse)
+   - Added Template Event Path input (Label + Entry) with default value "event:/VO/Narration/Battle/TemplateEvent"
+   - Added Defaulting Rules Summary (LabelFrame + Label) explaining the 4 rules.
+   - Added "Run Import" and "Cancel" buttons.
+
+2. Updated run_selection_flow in fmod_batch_import/gui.py
+   - Now instantiates BatchImportDialog.
+   - Returns tuple (csv_path, audio_dir, template_path).
+   - Supports TEST_MODE returning fixture values + default template path.
+
+3. Updated fmod_batch_import/__main__.py
+   - Updated main() to unpack 3 values from run_selection_flow().
+   - Fixed crash due to "too many values to unpack".
+
+4. Fixed fmod_batch_import/path_normalizer.py
+   - Removed duplicate/malformed code blocks at the end of normalize_row method.
+   - Removed duplicate validation logic that was overriding the new default logic.
+   - Verified fix allows application to start.
+
+5. Verification
+   - Ran application in TEST_MODE (FMOD_IMPORTER_TEST_MODE=1).
+   - Verified application starts, unpacks variables, and proceeds to import (skipping rows due to no FMOD connection).
+   - Output:
+     [INFO] Import Complete: Batch import finished.
+       Total:   2
+       Success: 0
+       Skipped: 2
+       Failed:  0
+     Log written to CSV directory.
+
+6. Note
+   - Screenshot not possible in headless environment.
+   - Code inspection confirms GUI elements are present using tkinter widgets.

@@ -56,13 +56,167 @@ class PathNormalizer:
     DISALLOWED_IN_PATH_PART: Set[str] = {'<', '>', ':', '"', '|', '?', '*', '\\'}
     
     # Pattern for valid FMOD path: type:/path/to/item
+    # Pattern for valid FMOD path: type:/path/to/item
     FMOD_PATH_PATTERN = re.compile(r'^(\w+):(/.*)?$')
     
-    def __init__(self):
-        """Initialize the path normalizer."""
+    # Default template event path for inheritance
+    DEFAULT_TEMPLATE_EVENT = "event:/VO/Narration/Battle/TemplateEvent"
+    
+    # Default bus/bank fallbacks
+    DEFAULT_BUS = "bus:/"
+    DEFAULT_BANK = "bank:/Master"
+    
+    def __init__(
+        self,
+        audio_base_dir: Optional[str] = None,
+        template_event_path: Optional[str] = None,
+        template_bus_path: Optional[str] = None,
+        template_bank_name: Optional[str] = None
+    ):
+        """Initialize the path normalizer.
+        
+        Args:
+            audio_base_dir: Base directory for audio files (for computing asset_path defaults)
+            template_event_path: Template event path for event_path default generation
+            template_bus_path: Template bus path for bus_path inheritance
+            template_bank_name: Template bank name for bank_name inheritance
+        """
         self.errors: List[str] = []
         self.warnings: List[str] = []
+        self.audio_base_dir = audio_base_dir
+        self.template_event_path = template_event_path or self.DEFAULT_TEMPLATE_EVENT
+        self.template_bus_path = template_bus_path
+        self.template_event_path = template_event_path or self.DEFAULT_TEMPLATE_EVENT
+        self.template_bus_path = template_bus_path
+        self.template_bank_name = template_bank_name
     
+    def _get_template_folder(self) -> str:
+        """Extract folder path from template event path.
+        
+        Returns:
+            Folder path (e.g., 'VO/Narration/Battle' from 'event:/VO/Narration/Battle/TemplateEvent')
+        """
+        path_type, remaining = self._extract_path_type(self.template_event_path)
+        if path_type == "event" and remaining:
+            # Remove leading slash and get folder path (everything except last component)
+            path = remaining.lstrip('/')
+            if '/' in path:
+                return path.rsplit('/', 1)[0]
+        return ""
+    
+    def _get_audio_name(self, audio_path: str) -> str:
+        """Extract audio filename without extension.
+        
+        Args:
+            audio_path: Path to audio file
+            
+        Returns:
+            Audio name without extension
+        """
+        from pathlib import Path
+        return Path(audio_path).stem
+    
+    def _compute_asset_path_default(self, audio_path: str) -> str:
+        """Compute default asset_path from audio_path relative to base directory.
+        
+        Args:
+            audio_path: Path to audio file
+            
+        Returns:
+            Relative path under audio directory (without filename)
+        """
+        if not self.audio_base_dir:
+            return ""
+        
+        from pathlib import Path
+        try:
+            audio_file = Path(audio_path)
+            base = Path(self.audio_base_dir)
+            
+            # If audio_path is absolute and under base, compute relative path
+            if audio_file.is_absolute():
+                try:
+                    rel_path = audio_file.relative_to(base)
+                    # Return parent directory of the file
+                    return str(rel_path.parent) if rel_path.parent != Path('.') else ""
+                except ValueError:
+                    # Not under base directory
+                    return ""
+            else:
+                # Relative path - return parent directory
+                return str(audio_file.parent) if audio_file.parent != Path('.') else ""
+        except Exception:
+            return ""
+    
+    def _apply_defaults(
+        self,
+        audio_path: str,
+        event_path: str,
+        asset_path: str,
+        bus_path: str,
+        bank_name: str
+    ) -> tuple[str, str, str, str, str]:
+        """Apply default rules for empty fields.
+        
+        Default rules (per confirmed spec):
+        - asset_path: if empty, use audio file's relative path under audio directory
+        - event_path: if empty, generate event:/<template folder>/<audio_name>
+        - bus_path: if empty, inherit from template or fallback to default bus
+        - bank_name: if empty, inherit from template or fallback to default bank
+        
+        Args:
+            audio_path: Path to audio file (required)
+            event_path: FMOD event path (may be empty)
+            asset_path: Target asset folder path (may be empty)
+            bus_path: FMOD bus path (may be empty)
+            bank_name: FMOD bank name (may be empty)
+            
+        Returns:
+            Tuple of (audio_path, event_path, asset_path, bus_path, bank_name) with defaults applied
+        """
+        audio_path = audio_path.strip() if audio_path else ""
+        event_path = event_path.strip() if event_path else ""
+        asset_path = asset_path.strip() if asset_path else ""
+        bus_path = bus_path.strip() if bus_path else ""
+        bank_name = bank_name.strip() if bank_name else ""
+        
+        # Get audio name for event_path generation
+        audio_name = self._get_audio_name(audio_path) if audio_path else ""
+        
+        # Rule 1: asset_path default
+        if not asset_path and audio_path:
+            asset_path = self._compute_asset_path_default(audio_path)
+            if asset_path:
+                self.warnings.append(f"asset_path default applied: {asset_path}")
+        
+        # Rule 2: event_path default
+        if not event_path and audio_name:
+            template_folder = self._get_template_folder()
+            if template_folder:
+                event_path = f"event:/{template_folder}/{audio_name}"
+            else:
+                event_path = f"event:/{audio_name}"
+            self.warnings.append(f"event_path default applied: {event_path}")
+        
+        # Rule 3: bus_path default (inherit from template or fallback)
+        if not bus_path:
+            if self.template_bus_path:
+                bus_path = self.template_bus_path
+                self.warnings.append(f"bus_path inherited from template: {bus_path}")
+            else:
+                bus_path = self.DEFAULT_BUS
+                self.warnings.append(f"bus_path fallback applied: {bus_path}")
+        
+        # Rule 4: bank_name default (inherit from template or fallback)
+        if not bank_name:
+            if self.template_bank_name:
+                bank_name = self.template_bank_name
+                self.warnings.append(f"bank_name inherited from template: {bank_name}")
+            else:
+                bank_name = self.DEFAULT_BANK
+                self.warnings.append(f"bank_name fallback applied: {bank_name}")
+        
+        return audio_path, event_path, asset_path, bus_path, bank_name
     def _validate_not_empty(self, value: str, field_name: str) -> None:
         """Validate that a required field is not empty.
         
@@ -249,7 +403,7 @@ class PathNormalizer:
         
         Args:
             audio_path: Path to audio file (required)
-            event_path: FMOD event path (required)
+            event_path: FMOD event path (optional, auto-generated from audio_path if empty)
             asset_path: Target asset folder path (optional)
             bus_path: FMOD bus path (optional)
             bank_name: FMOD bank path (optional)
@@ -270,15 +424,21 @@ class PathNormalizer:
         except PathValidationError as e:
             self.errors.append(str(e))
         
-        try:
-            self._validate_not_empty(event_path, "event_path")
-        except PathValidationError as e:
-            self.errors.append(str(e))
+        # Apply confirmed default rules for empty fields
+        # Rules:
+        # - asset_path: if empty, use audio file's relative path under audio directory
+        # - event_path: if empty, generate event:/<template folder>/<audio_name>
+        # - bus_path: if empty, inherit from template or fallback to default bus
+        # - bank_name: if empty, inherit from template or fallback to default bank
+        audio_path, event_path, asset_path, bus_path, bank_name = self._apply_defaults(
+            audio_path, event_path, asset_path, bus_path, bank_name
+        )
         
         # Normalize paths
         normalized_event = ""
         normalized_bus = ""
         normalized_bank = ""
+        normalized_asset = asset_path
         
         try:
             normalized_event = self.normalize_event_path(event_path)
@@ -294,6 +454,7 @@ class PathNormalizer:
             normalized_bank = self.normalize_bank_path(bank_name)
         except PathValidationError as e:
             self.errors.append(str(e))
+        self.warnings = []
         
         # Check if there were any errors
         if self.errors:
@@ -302,9 +463,9 @@ class PathNormalizer:
             )
         
         return ImportRow(
-            audio_path=audio_path.strip(),
+            audio_path=audio_path,
             event_path=normalized_event,
-            asset_path=asset_path.strip() if asset_path else "",
+            asset_path=asset_path,
             bus_path=normalized_bus,
             bank_name=normalized_bank,
             row_index=row_index,

@@ -16,7 +16,7 @@ from fmod_batch_import.orchestrator import Orchestrator, FMODConnectionError
 
 def main() -> int:
     # --- Step 1: Get CSV and audio directory via GUI ---
-    csv_path, audio_dir = run_selection_flow()
+    csv_path, audio_dir, template_path = run_selection_flow()
     if not csv_path or not audio_dir:
         return 0  # User cancelled cleanly
 

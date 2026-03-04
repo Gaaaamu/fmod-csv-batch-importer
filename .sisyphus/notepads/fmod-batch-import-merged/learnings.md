@@ -175,3 +175,11 @@ This format requires specialized parsing rather than direct `json.loads()` on th
 - **Completed**: 57/57 (100%)
 - **Tests Passing**: 95/95
 - **Syntax Errors**: 0 (after fix)
+
+## 2026-03-04 Task 5: GUI Updates
+- Implemented `BatchImportDialog` with template path input and rules summary.
+- Updated `run_selection_flow` to return `(csv_path, audio_dir, template_path)`.
+- Updated `__main__.py` to handle 3 return values.
+- Fixed `path_normalizer.py` syntax errors (duplicate code blocks).
+- Verified application runs in TEST_MODE.
+
