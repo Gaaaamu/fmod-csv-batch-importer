@@ -26,7 +26,7 @@ class LogWriter:
         self.total_count = 0
         
         # Storage for row results and warnings
-        self.rows: list[dict] = []
+        self.rows: list[dict[str, object]] = []
         self.warnings: list[str] = []
         
         # Generate timestamped filename
@@ -46,21 +46,15 @@ class LogWriter:
         event_path: str,
         status: str,
         message: str = "",
-        defaults_applied: str = "",
-        inheritance_source: str = "",
-        template_used: str = ""
     ) -> None:
         """Log the result of processing a single row.
-        
+
         Args:
-            row_num: Row number in the CSV file
-            audio_file: Path to the audio file
-            event_path: FMOD event path
-            status: One of 'success', 'skip', 'fail'
-            message: Optional message (e.g., error details)
-            defaults_applied: Comma-separated list of default values applied
-            inheritance_source: Source of inherited values (e.g., parent event)
-            template_used: Name of template used for this row
+            row_num: Row number in the CSV file.
+            audio_file: Path to the audio file.
+            event_path: FMOD event path.
+            status: One of 'success', 'skip', 'fail'.
+            message: Optional message (e.g., error details).
         """
         self.rows.append({
             "row": row_num,
@@ -68,9 +62,6 @@ class LogWriter:
             "event": event_path,
             "status": status,
             "message": message,
-            "defaults_applied": defaults_applied,
-            "inheritance_source": inheritance_source,
-            "template_used": template_used
         })
         
         self.total_count += 1
@@ -104,19 +95,15 @@ class LogWriter:
         lines = [
             "## Results",
             "",
-            "| Row | Audio | Event | Status | Message | Defaults Applied | Inheritance Source | Template Used |",
-            "|-----|-------|-------|--------|---------|------------------|-------------------|---------------|"
+            "| Row | Audio | Event | Status | Message |",
+            "|-----|-------|-------|--------|---------|"
         ]
-        
+
         for row in self.rows:
-            # Escape pipe characters in messages and other fields
-            message = row["message"].replace("|", "\\|")
-            defaults = str(row.get("defaults_applied", "")).replace("|", "\\|")
-            inheritance = str(row.get("inheritance_source", "")).replace("|", "\\|")
-            template = str(row.get("template_used", "")).replace("|", "\\|")
+            message = str(row["message"]).replace("|", "\\|")
             lines.append(
                 f"| {row['row']} | `{row['audio']}` | `{row['event']}` | "
-                f"{row['status']} | {message} | {defaults} | {inheritance} | {template} |"
+                f"{row['status']} | {message} |"
             )
         
         lines.append("")
@@ -167,7 +154,7 @@ class LogWriter:
         self.log_path.write_text(content, encoding="utf-8")
         return self.log_path
 
-    def get_summary(self) -> dict:
+    def get_summary(self) -> dict[str, int]:
         """Get the summary counts.
         
         Returns:

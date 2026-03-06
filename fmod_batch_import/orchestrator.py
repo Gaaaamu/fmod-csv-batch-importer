@@ -120,6 +120,7 @@ class Orchestrator:
             raise ValueError(f"CSV error: {exc}") from exc
 
         summary.total = len(rows)
+        print(f"[Import] {len(rows)} row(s) loaded from CSV")
 
         # --- Phase 1: Python preprocessing ---
         prepped_rows: list[dict[str, object]] = []  # rows ready for JS processing
@@ -142,8 +143,10 @@ class Orchestrator:
                     row_index=idx,
                 )
             except Exception as exc:
+                msg = f"Path error: {exc}"
+                print(f"[ FAIL ] Row {idx} | {audio_name} | {msg}")
                 all_results.append(
-                    RowResult(idx, "fail", event_path_raw, audio_name, f"Path error: {exc}")
+                    RowResult(idx, "fail", event_path_raw, audio_name, msg)
                 )
                 continue
 
@@ -151,6 +154,7 @@ class Orchestrator:
             try:
                 audio_abs = self._audio_resolver.resolve(audio_name)
             except FileNotFoundError as exc:
+                print(f"[ FAIL ] Row {idx} | {audio_name} | {exc}")
                 all_results.append(
                     RowResult(idx, "fail", norm.event_path, audio_name, str(exc))
                 )
@@ -187,6 +191,7 @@ class Orchestrator:
 
         # --- Phase 2: Single batch JS call ---
         if prepped_rows:
+            print(f"[Import] Sending {len(prepped_rows)} row(s) to FMOD...")
             try:
                 batch_result = self._exec(
                     js_batch_process(prepped_rows, self.template_event_id)
@@ -212,8 +217,20 @@ class Orchestrator:
                     msg = str(item.get("message", ""))
                     warnings_raw = item.get("warnings", [])
                     all_results.append(RowResult(row_idx, status, ep, an, msg))
+
+                    # --- Terminal output per row ---
+                    if status == "success":
+                        warn_count = len(warnings_raw) if isinstance(warnings_raw, list) else 0
+                        suffix = f" ({warn_count} warning(s))" if warn_count else ""
+                        print(f"[  OK  ] Row {row_idx} | {ep} | {an}{suffix}")
+                    elif status == "skip":
+                        print(f"[ SKIP ] Row {row_idx} | {ep} | {an}")
+                    else:
+                        print(f"[ FAIL ] Row {row_idx} | {ep} | {an} | {msg}")
+
                     if isinstance(warnings_raw, list):
                         for w in warnings_raw:
+                            print(f"[ WARN ] Row {row_idx} | {w}")
                             self.log_writer.add_warning(f"Row {row_idx}: {w}")
 
         # --- Phase 3: Sort by row order, aggregate, and log ---
@@ -237,12 +254,15 @@ class Orchestrator:
             )
 
         # Save project (best-effort)
+        print("[Import] Saving project...")
         try:
             _ = self._exec(js_save())
         except FMODConnectionError:
             pass
 
-        _ = self.log_writer.write()
+        log_path = self.log_writer.write()
+        print(f"[Import] Done — {summary.success} ok, {summary.skip} skip, {summary.fail} fail")
+        print(f"[Import] Log: {log_path}")
         return summary
 
     # ------------------------------------------------------------------
