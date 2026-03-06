@@ -7,11 +7,10 @@ Usage:
 """
 
 import sys
-import os
 
 from fmod_batch_import.gui import run_selection_flow, show_error, show_info, prompt_start_fmod
-from fmod_batch_import.fmod_client import FMODClient
-from fmod_batch_import.orchestrator import Orchestrator, FMODConnectionError
+from fmod_batch_import.fmod_client import FMODClient, FMODConnectionError
+from fmod_batch_import.orchestrator import Orchestrator
 
 
 def main() -> int:
@@ -35,14 +34,16 @@ def main() -> int:
             return 1
 
     if not connected:
-        show_error("Connection Failed",
-                   "Could not connect to FMOD Studio after multiple attempts.\n"
-                   "Please ensure FMOD Studio is open and the scripting server is enabled.")
+        show_error(
+            "Connection Failed",
+            "Could not connect to FMOD Studio after multiple attempts.\n"
+            "Please ensure FMOD Studio is open and the scripting server is enabled.",
+        )
         return 1
 
     # --- Step 3: Run batch import ---
     try:
-        orch = Orchestrator(csv_path, audio_dir, client)
+        orch = Orchestrator(csv_path, audio_dir, client, template_event_path=template_path)
         summary = orch.run()
 
         show_info(

@@ -1,24 +1,31 @@
+from __future__ import annotations
+
 """
 CSV Parser module for FMOD Batch Import.
 
 Handles reading and validation of CSV files with strict schema enforcement.
 """
 import csv
-from collections import namedtuple
-from typing import List, TextIO, Optional
+from typing import NamedTuple, TextIO
 
 
 # Expected column names for the CSV schema
-EXPECTED_COLUMNS = ["audio_path", "event_path", "asset_path", "bus_path", "bank_name"]
+EXPECTED_COLUMNS: list[str] = ["audio_path", "event_path", "asset_path", "bus_path", "bank_name"]
 
 # Named tuple representing a parsed CSV row
-CSVRow = namedtuple("CSVRow", ["row_index", "audio_path", "event_path", "asset_path", "bus_path", "bank_name"])
+class CSVRow(NamedTuple):
+    row_index: int
+    audio_path: str
+    event_path: str
+    asset_path: str
+    bus_path: str
+    bank_name: str
 
 
 class CSVParseError(Exception):
     """Exception raised for CSV parsing errors."""
     
-    def __init__(self, message: str, row_number: Optional[int] = None):
+    def __init__(self, message: str, row_number: int | None = None):
         self.message = message
         self.row_number = row_number
         super().__init__(self._format_message())
@@ -46,7 +53,7 @@ class CSVReader:
     - Strict column count validation (no extra columns allowed)
     """
     
-    def __init__(self, expected_columns: Optional[List[str]] = None):
+    def __init__(self, expected_columns: list[str] | None = None):
         """
         Initialize CSVReader.
         
@@ -55,7 +62,7 @@ class CSVReader:
         """
         self.expected_columns = expected_columns or EXPECTED_COLUMNS
     
-    def read(self, file_obj: TextIO) -> List[CSVRow]:
+    def read(self, file_obj: TextIO) -> list[CSVRow]:
         """
         Read and parse CSV from file object.
         
@@ -75,11 +82,9 @@ class CSVReader:
         if not raw_content or not raw_content.strip():
             raise CSVParseError("File is empty")
         
-        # Remove UTF-8 BOM if present
+        # Remove UTF-8 BOM if present (safety net for StringIO inputs;
+        # read_file() uses utf-8-sig which already strips BOM at open time)
         raw_content = raw_content.lstrip('\ufeff')
-        raw_content = raw_content.lstrip('\ufeff')
-        if raw_content.startswith('\ufeff'):
-            raw_content = raw_content[1:]
         
         # Parse CSV
         lines = raw_content.splitlines()
@@ -108,7 +113,7 @@ class CSVReader:
             )
         
         # Parse data rows
-        rows = []
+        rows: list[CSVRow] = []
         row_index = 0
         
         for line_num, line in enumerate(lines[1:], start=2):
@@ -149,7 +154,7 @@ class CSVReader:
         
         return rows
     
-    def read_file(self, filepath: str) -> List[CSVRow]:
+    def read_file(self, filepath: str) -> list[CSVRow]:
         """
         Read and parse CSV from file path.
         

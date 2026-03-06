@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 TEST_MODE = os.environ.get("FMOD_IMPORTER_TEST_MODE", "")
 FIXTURE_CSV = os.environ.get("FMOD_IMPORTER_FIXTURE_CSV", "")
 FIXTURE_AUDIO_DIR = os.environ.get("FMOD_IMPORTER_FIXTURE_AUDIO_DIR", "")
-DEFAULT_TEMPLATE_PATH = "event:/VO/Narration/Battle/TemplateEvent"
+DEFAULT_TEMPLATE_PATH = ""
 
 
 def _root() -> tk.Tk:

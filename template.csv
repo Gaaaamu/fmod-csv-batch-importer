@@ -1,0 +1,3 @@
+audio_path,event_path,asset_path,bus_path,bank_name
+Nar_FT_AllyTranscendence_EN_01,event:/VO/Hero/hero_01,,bus:/VO,bank:/VO
+Nar_FT_AllyCorruption_EN_01,event:/VO/Hero/hero_02,,bus:/VO,bank:/VO

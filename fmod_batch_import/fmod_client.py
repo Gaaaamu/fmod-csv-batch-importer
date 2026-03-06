@@ -1,6 +1,10 @@
 import socket
 
 
+class FMODConnectionError(Exception):
+    """Raised when FMOD TCP connection is lost or unavailable."""
+
+
 class FMODClient:
     def __init__(self, host: str = "localhost", port: int = 3663):
         self.host: str = host
@@ -15,20 +19,27 @@ class FMODClient:
             self._socket = None
             return False
 
-    def execute(self, js_code: str) -> str | None:
+    def execute(self, js_code: str) -> str:
+        """Execute JS code via FMOD TCP scripting API.
+
+        Raises:
+            FMODConnectionError: If connection cannot be established or is lost.
+        """
         if self._socket is None:
             if not self.connect():
-                return None
-        if self._socket is None:
-            return None
+                raise FMODConnectionError(
+                    f"Cannot connect to FMOD Studio at {self.host}:{self.port}"
+                )
+        sock = self._socket
+        assert sock is not None  # guaranteed by connect() above
         try:
-            self._socket.settimeout(10.0)
-            self._socket.sendall(js_code.encode("utf-8"))
+            sock.settimeout(3.0)
+            sock.sendall(js_code.encode("utf-8"))
             chunks = []
             total_nulls = 0
             while True:
                 try:
-                    chunk = self._socket.recv(4096)
+                    chunk = sock.recv(4096)
                 except socket.timeout:
                     break
                 if not chunk:
@@ -37,11 +48,17 @@ class FMODClient:
                 total_nulls += chunk.count(b'\0')
                 if total_nulls >= 2:
                     break
-            self._socket.settimeout(None)
+            sock.settimeout(None)
             response = b''.join(chunks)
             return response.decode("utf-8")
-        except (ConnectionRefusedError, socket.timeout):
-            return None
+        except ConnectionRefusedError as exc:
+            self._socket = None
+            raise FMODConnectionError("FMOD connection refused during execute") from exc
+        except socket.timeout as exc:
+            raise FMODConnectionError("FMOD connection timed out") from exc
+        except OSError as exc:
+            self._socket = None
+            raise FMODConnectionError(f"FMOD socket error: {exc}") from exc
 
     def close(self) -> None:
         if self._socket is not None:

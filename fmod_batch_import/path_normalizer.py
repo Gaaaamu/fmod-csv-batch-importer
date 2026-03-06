@@ -7,7 +7,6 @@ Normalizes FMOD paths according to FMOD Studio scripting conventions:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Set
 import re
 
 
@@ -30,7 +29,7 @@ class ImportRow:
     bus_path: str = ""
     bank_name: str = ""
     row_index: int = 0
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class PathValidationError(Exception):
@@ -46,47 +45,47 @@ class PathNormalizer:
     """
     
     # Valid FMOD path types
-    VALID_TYPES: Set[str] = {"event", "bus", "bank", "vca", "asset"}
+    VALID_TYPES: set[str] = {"event", "bus", "bank", "vca", "asset"}
     
     # Required types that cannot be empty when specified
-    REQUIRED_EVENT_FIELDS: Set[str] = {"audio_path", "event_path"}
+    REQUIRED_EVENT_FIELDS: set[str] = {"audio_path", "event_path"}
     
     # Disallowed characters in FMOD path parts (based on FMOD Studio conventions)
     # Note: ':' is allowed in the prefix but not in the path portion
-    DISALLOWED_IN_PATH_PART: Set[str] = {'<', '>', ':', '"', '|', '?', '*', '\\'}
+    DISALLOWED_IN_PATH_PART: set[str] = {'<', '>', ':', '"', '|', '?', '*', '\\'}
     
     # Pattern for valid FMOD path: type:/path/to/item
     # Pattern for valid FMOD path: type:/path/to/item
-    FMOD_PATH_PATTERN = re.compile(r'^(\w+):(/.*)?$')
+    FMOD_PATH_PATTERN: re.Pattern[str] = re.compile(r'^(\w+):(/.*)?$')
     
-    # Default template event path for inheritance
-    DEFAULT_TEMPLATE_EVENT = "event:/VO/Narration/Battle/TemplateEvent"
-    
-    # Default bus/bank fallbacks
-    DEFAULT_BUS = "bus:/"
-    DEFAULT_BANK = "bank:/Master"
+    audio_dir: str | None
+    event_folder_supported: bool
+    template_event_path: str | None
+    template_bus_path: str | None
+    template_bank_name: str | None
     
     def __init__(
         self,
-        audio_base_dir: Optional[str] = None,
-        template_event_path: Optional[str] = None,
-        template_bus_path: Optional[str] = None,
-        template_bank_name: Optional[str] = None
+        audio_dir: str | None = None,
+        template_event_path: str | None = None,
+        template_bus_path: str | None = None,
+        template_bank_name: str | None = None,
+        event_folder_supported: bool = False
     ):
         """Initialize the path normalizer.
         
         Args:
-            audio_base_dir: Base directory for audio files (for computing asset_path defaults)
+            audio_dir: Base directory for audio files (for computing asset_path defaults)
             template_event_path: Template event path for event_path default generation
             template_bus_path: Template bus path for bus_path inheritance
             template_bank_name: Template bank name for bank_name inheritance
+            event_folder_supported: Whether nested event folders can be created
         """
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
-        self.audio_base_dir = audio_base_dir
-        self.template_event_path = template_event_path or self.DEFAULT_TEMPLATE_EVENT
-        self.template_bus_path = template_bus_path
-        self.template_event_path = template_event_path or self.DEFAULT_TEMPLATE_EVENT
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self.audio_dir = audio_dir
+        self.event_folder_supported = event_folder_supported
+        self.template_event_path = template_event_path if template_event_path else None
         self.template_bus_path = template_bus_path
         self.template_bank_name = template_bank_name
     
@@ -94,8 +93,11 @@ class PathNormalizer:
         """Extract folder path from template event path.
         
         Returns:
-            Folder path (e.g., 'VO/Narration/Battle' from 'event:/VO/Narration/Battle/TemplateEvent')
+            Folder path (e.g., 'VO/Narration/Battle' from 'event:/VO/Narration/Battle/TemplateEvent'),
+            or empty string if no template is configured.
         """
+        if not self.template_event_path:
+            return ""
         path_type, remaining = self._extract_path_type(self.template_event_path)
         if path_type == "event" and remaining:
             # Remove leading slash and get folder path (everything except last component)
@@ -125,13 +127,13 @@ class PathNormalizer:
         Returns:
             Relative path under audio directory (without filename)
         """
-        if not self.audio_base_dir:
+        if not self.audio_dir:
             return ""
         
         from pathlib import Path
         try:
             audio_file = Path(audio_path)
-            base = Path(self.audio_base_dir)
+            base = Path(self.audio_dir)
             
             # If audio_path is absolute and under base, compute relative path
             if audio_file.is_absolute():
@@ -193,28 +195,29 @@ class PathNormalizer:
         if not event_path and audio_name:
             template_folder = self._get_template_folder()
             if template_folder:
-                event_path = f"event:/{template_folder}/{audio_name}"
+                default_event_path = f"event:/{template_folder}/{audio_name}"
             else:
-                event_path = f"event:/{audio_name}"
-            self.warnings.append(f"event_path default applied: {event_path}")
+                default_event_path = f"event:/{audio_name}"
+
+            event_path = default_event_path
+            self.warnings.append(f"event_path default applied: {default_event_path}")
+
+            if template_folder and not self.event_folder_supported:
+                fallback_path = f"event:/{audio_name}"
+                event_path = fallback_path
+                self.warnings.append(
+                    f"event_path folder unsupported; using root-level event: {fallback_path}"
+                )
         
-        # Rule 3: bus_path default (inherit from template or fallback)
-        if not bus_path:
-            if self.template_bus_path:
-                bus_path = self.template_bus_path
-                self.warnings.append(f"bus_path inherited from template: {bus_path}")
-            else:
-                bus_path = self.DEFAULT_BUS
-                self.warnings.append(f"bus_path fallback applied: {bus_path}")
-        
-        # Rule 4: bank_name default (inherit from template or fallback)
-        if not bank_name:
-            if self.template_bank_name:
-                bank_name = self.template_bank_name
-                self.warnings.append(f"bank_name inherited from template: {bank_name}")
-            else:
-                bank_name = self.DEFAULT_BANK
-                self.warnings.append(f"bank_name fallback applied: {bank_name}")
+        # Rule 3: bus_path — inherit from template if provided, otherwise leave empty
+        if not bus_path and self.template_bus_path:
+            bus_path = self.template_bus_path
+            self.warnings.append(f"bus_path inherited from template: {bus_path}")
+
+        # Rule 4: bank_name — inherit from template if provided, otherwise leave empty
+        if not bank_name and self.template_bank_name:
+            bank_name = self.template_bank_name
+            self.warnings.append(f"bank_name inherited from template: {bank_name}")
         
         return audio_path, event_path, asset_path, bus_path, bank_name
     def _validate_not_empty(self, value: str, field_name: str) -> None:
@@ -240,7 +243,7 @@ class PathNormalizer:
         Raises:
             PathValidationError: If disallowed characters are found
         """
-        found_chars = []
+        found_chars: list[str] = []
         for char in self.DISALLOWED_IN_PATH_PART:
             if char in path_part:
                 found_chars.append(char)
@@ -275,7 +278,7 @@ class PathNormalizer:
             # No prefix - validate the whole path
             self._validate_disallowed_chars(path, field_name)
     
-    def _extract_path_type(self, path: str) -> tuple[Optional[str], str]:
+    def _extract_path_type(self, path: str) -> tuple[str | None, str]:
         """Extract the type prefix from a FMOD path.
         
         Args:
@@ -305,7 +308,6 @@ class PathNormalizer:
         """
         self._validate_not_empty(path, "event_path")
         path = path.strip()
-        self._validate_path_chars(path, "event_path")
         self._validate_path_chars(path, "event_path")
         
         path_type, remaining = self._extract_path_type(path)
@@ -438,8 +440,6 @@ class PathNormalizer:
         normalized_event = ""
         normalized_bus = ""
         normalized_bank = ""
-        normalized_asset = asset_path
-        
         try:
             normalized_event = self.normalize_event_path(event_path)
         except PathValidationError as e:
@@ -454,7 +454,7 @@ class PathNormalizer:
             normalized_bank = self.normalize_bank_path(bank_name)
         except PathValidationError as e:
             self.errors.append(str(e))
-        self.warnings = []
+
         
         # Check if there were any errors
         if self.errors:

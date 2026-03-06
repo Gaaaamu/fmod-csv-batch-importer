@@ -1,14 +1,20 @@
-"""Tests for Orchestrator — mocks FMODClient to avoid real FMOD connection."""
+"""Tests for Orchestrator — mocks FMODClient to avoid real FMOD connection.
+
+Batch architecture: Python preprocessing + ONE batch JS call + ONE save call.
+Mock responses follow the new sequence:
+  1. Single batch call  → {ok: true, results: [...]}
+  2. save              → "ok"
+"""
 
 import json
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from fmod_batch_import.orchestrator import Orchestrator, FMODConnectionError
+from fmod_batch_import.orchestrator import Orchestrator
+from fmod_batch_import.fmod_client import FMODConnectionError
 
 
 # ---------------------------------------------------------------------------
@@ -36,10 +42,34 @@ def _make_audio(tmp_dir: str, name: str = "test_audio.wav") -> str:
 
 
 def _mock_client(responses: list) -> MagicMock:
-    """Build a mock FMODClient that returns responses in sequence."""
+    """Build a mock FMODClient whose execute() returns responses in sequence."""
     client = MagicMock()
     client.execute.side_effect = [json.dumps(r) for r in responses]
     return client
+
+
+def _batch_ok(results: list[dict]) -> dict:
+    """Shorthand for a successful batch call response."""
+    return {"ok": True, "results": results}
+
+
+def _row_result(
+    row_index: int,
+    status: str,
+    event_path: str,
+    audio_name: str,
+    message: str = "OK",
+    warnings: list[str] | None = None,
+) -> dict:
+    """Shorthand for a single per-row result dict from JS."""
+    return {
+        "row_index": row_index,
+        "status": status,
+        "event_path": event_path,
+        "audio_name": audio_name,
+        "message": message,
+        "warnings": warnings or [],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +87,10 @@ class TestOrchestratorSuccess:
         }], audio_dir)
 
         client = _mock_client([
-            {"ok": False, "id": None, "error": "Not found"},   # lookup event (not exists)
-            {"ok": True, "asset_id": "asset-guid-1"},           # import audio
-            {"ok": True, "id": "event-guid-1"},                 # create event
-            {"ok": True, "track_id": "track-guid-1"},           # add track
-            {"ok": True, "sound_id": "sound-guid-1"},           # add sound
-            "ok",                                               # save
+            _batch_ok([
+                _row_result(1, "success", "event:/VO/hero_01", "hero_01.wav"),
+            ]),
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
@@ -74,7 +102,7 @@ class TestOrchestratorSuccess:
         assert summary.total == 1
 
     def test_event_already_exists_skips(self, tmp_path):
-        """If event already exists, row should be skipped."""
+        """If JS reports event already exists, row should be skipped."""
         audio_dir = str(tmp_path)
         _make_audio(audio_dir, "hero_01.wav")
         csv_path = _make_csv([{
@@ -83,8 +111,11 @@ class TestOrchestratorSuccess:
         }], audio_dir)
 
         client = _mock_client([
-            {"ok": True, "id": "existing-guid"},  # lookup event (exists!)
-            "ok",                                  # save
+            _batch_ok([
+                _row_result(1, "skip", "event:/VO/hero_01", "hero_01.wav",
+                            message="Event already exists: event:/VO/hero_01"),
+            ]),
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
@@ -94,8 +125,8 @@ class TestOrchestratorSuccess:
         assert summary.success == 0
         assert summary.fail == 0
 
-    def test_bus_not_found_skips(self, tmp_path):
-        """If bus not found, row should be skipped."""
+    def test_bus_not_found_warns_and_continues(self, tmp_path):
+        """JS reports bus not found as a warning; row still succeeds."""
         audio_dir = str(tmp_path)
         _make_audio(audio_dir, "hero_01.wav")
         csv_path = _make_csv([{
@@ -105,19 +136,22 @@ class TestOrchestratorSuccess:
         }], audio_dir)
 
         client = _mock_client([
-            {"ok": False, "id": None, "error": "Not found"},   # lookup event
-            {"ok": False, "bus_id": None, "error": "Bus not found"},  # lookup bus
-            "ok",                                               # save
+            _batch_ok([
+                _row_result(1, "success", "event:/VO/hero_01", "hero_01.wav",
+                            warnings=["Bus not found: bus:/SFX"]),
+            ]),
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
         summary = orch.run()
 
-        assert summary.skip == 1
-        assert summary.success == 0
+        assert summary.success == 1
+        assert summary.skip == 0
+        assert summary.fail == 0
 
-    def test_bank_not_found_skips(self, tmp_path):
-        """If bank not found, row should be skipped."""
+    def test_bank_not_found_warns_and_continues(self, tmp_path):
+        """JS reports bank not found as a warning; row still succeeds."""
         audio_dir = str(tmp_path)
         _make_audio(audio_dir, "hero_01.wav")
         csv_path = _make_csv([{
@@ -127,18 +161,22 @@ class TestOrchestratorSuccess:
         }], audio_dir)
 
         client = _mock_client([
-            {"ok": False, "id": None, "error": "Not found"},    # lookup event
-            {"ok": False, "bank_id": None, "error": "Not found"},  # lookup bank
-            "ok",                                                # save
+            _batch_ok([
+                _row_result(1, "success", "event:/VO/hero_01", "hero_01.wav",
+                            warnings=["Bank not found: bank:/Master"]),
+            ]),
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
         summary = orch.run()
 
-        assert summary.skip == 1
+        assert summary.success == 1
+        assert summary.skip == 0
+        assert summary.fail == 0
 
     def test_audio_not_found_fails_row(self, tmp_path):
-        """Missing audio file should fail the row but continue batch."""
+        """Missing audio file (Python resolve fails) → row marked fail, no batch call."""
         audio_dir = str(tmp_path)
         # No audio file created
         csv_path = _make_csv([{
@@ -146,9 +184,9 @@ class TestOrchestratorSuccess:
             "event_path": "event:/VO/missing",
         }], audio_dir)
 
+        # No batch call since prepped_rows is empty; only save is called.
         client = _mock_client([
-            {"ok": False, "id": None, "error": "Not found"},  # lookup event
-            "ok",                                              # save
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
@@ -158,23 +196,20 @@ class TestOrchestratorSuccess:
         assert summary.success == 0
 
     def test_row_failure_does_not_stop_batch(self, tmp_path):
-        """A failing row should not stop subsequent rows."""
+        """A Python-side failing row (audio missing) does not prevent other rows."""
         audio_dir = str(tmp_path)
         _make_audio(audio_dir, "good.wav")
         csv_path = _make_csv([
             {"audio_path": "missing.wav", "event_path": "event:/VO/missing"},
-            {"audio_path": "good.wav", "event_path": "event:/VO/good"},
+            {"audio_path": "good.wav",    "event_path": "event:/VO/good"},
         ], audio_dir)
 
+        # Row 1 fails Python-side (audio missing) → only row 2 goes into batch
         client = _mock_client([
-            {"ok": False, "id": None, "error": "Not found"},  # lookup event row1
-            # row1 fails (audio not found) — no more calls for row1
-            {"ok": False, "id": None, "error": "Not found"},  # lookup event row2
-            {"ok": True, "asset_id": "asset-2"},               # import audio row2
-            {"ok": True, "id": "event-2"},                     # create event row2
-            {"ok": True, "track_id": "track-2"},               # add track row2
-            {"ok": True, "sound_id": "sound-2"},               # add sound row2
-            "ok",                                              # save
+            _batch_ok([
+                _row_result(2, "success", "event:/VO/good", "good.wav"),
+            ]),
+            "ok",  # save
         ])
 
         orch = Orchestrator(csv_path, audio_dir, client)
@@ -185,7 +220,7 @@ class TestOrchestratorSuccess:
         assert summary.total == 2
 
     def test_tcp_failure_aborts_batch(self, tmp_path):
-        """TCP connection failure should abort the entire batch."""
+        """TCP connection failure on the batch call aborts the entire batch."""
         audio_dir = str(tmp_path)
         _make_audio(audio_dir, "hero.wav")
         csv_path = _make_csv([
@@ -193,8 +228,86 @@ class TestOrchestratorSuccess:
         ], audio_dir)
 
         client = MagicMock()
-        client.execute.return_value = None  # Simulate connection lost
+        client.execute.side_effect = FMODConnectionError("FMOD connection lost")
 
         orch = Orchestrator(csv_path, audio_dir, client)
         with pytest.raises(FMODConnectionError):
             orch.run()
+
+    def test_multiple_rows_single_batch_call(self, tmp_path):
+        """Multiple rows go through ONE batch call, not separate calls per row."""
+        audio_dir = str(tmp_path)
+        for name in ["a.wav", "b.wav", "c.wav"]:
+            _make_audio(audio_dir, name)
+        csv_path = _make_csv([
+            {"audio_path": "a.wav", "event_path": "event:/A"},
+            {"audio_path": "b.wav", "event_path": "event:/B"},
+            {"audio_path": "c.wav", "event_path": "event:/C"},
+        ], audio_dir)
+
+        client = _mock_client([
+            _batch_ok([
+                _row_result(1, "success", "event:/A", "a.wav"),
+                _row_result(2, "success", "event:/B", "b.wav"),
+                _row_result(3, "success", "event:/C", "c.wav"),
+            ]),
+            "ok",  # save
+        ])
+
+        orch = Orchestrator(csv_path, audio_dir, client)
+        summary = orch.run()
+
+        assert summary.success == 3
+        assert summary.total == 3
+        # Exactly 2 TCP calls: 1 batch + 1 save
+        assert client.execute.call_count == 2
+
+    def test_js_fail_result_counts_as_fail(self, tmp_path):
+        """JS-side failure in a row (e.g. addEvent null) is counted as fail."""
+        audio_dir = str(tmp_path)
+        _make_audio(audio_dir, "hero.wav")
+        csv_path = _make_csv([{
+            "audio_path": "hero.wav",
+            "event_path": "event:/VO/hero",
+        }], audio_dir)
+
+        client = _mock_client([
+            _batch_ok([
+                _row_result(1, "fail", "event:/VO/hero", "hero.wav",
+                            message="addEvent null"),
+            ]),
+            "ok",  # save
+        ])
+
+        orch = Orchestrator(csv_path, audio_dir, client)
+        summary = orch.run()
+
+        assert summary.fail == 1
+        assert summary.success == 0
+
+    def test_result_order_preserved(self, tmp_path):
+        """Results appear in original CSV row order even if JS returns them in order."""
+        audio_dir = str(tmp_path)
+        for name in ["x.wav", "y.wav"]:
+            _make_audio(audio_dir, name)
+        csv_path = _make_csv([
+            {"audio_path": "x.wav", "event_path": "event:/X"},
+            {"audio_path": "y.wav", "event_path": "event:/Y"},
+        ], audio_dir)
+
+        client = _mock_client([
+            _batch_ok([
+                _row_result(1, "success", "event:/X", "x.wav"),
+                _row_result(2, "skip",    "event:/Y", "y.wav",
+                            message="Event already exists: event:/Y"),
+            ]),
+            "ok",  # save
+        ])
+
+        orch = Orchestrator(csv_path, audio_dir, client)
+        summary = orch.run()
+
+        assert summary.success == 1
+        assert summary.skip == 1
+        assert summary.rows[0].row_index == 1
+        assert summary.rows[1].row_index == 2

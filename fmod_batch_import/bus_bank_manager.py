@@ -1,12 +1,12 @@
 """
-Bus and Bank Manager module for FMOD Batch Import.
+DEPRECATED — Bus and Bank Manager module for FMOD Batch Import.
 
-Generates JavaScript code for bus/bank lookup and assignment operations.
-Uses official FMOD Studio 2.02 Scripting API via studio.project.lookup.
+This module was used in the old per-row import architecture.
+Bus and bank operations are now handled entirely inline inside
+js_batch_process() in js_builder.py.
 
-Reference:
-- https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project.html#projectlookup
-- https://www.fmod.com/docs/2.02/studio/scripting-api-reference-project-managedobject.html#managedrelationshipadd
+This file is no longer imported or called anywhere.
+Do not add new code here. Retained for historical reference only.
 """
 
 from fmod_batch_import.js_builder import _esc
@@ -52,51 +52,4 @@ def lookup_bank(bank_path: str) -> str:
     )
 
 
-def assign_bus_to_event(event_id: str, bus_id: str) -> str:
-    """
-    Generate JavaScript to assign event output to a bus (by GUID).
 
-    Args:
-        event_id: GUID of the event
-        bus_id: GUID of the bus
-
-    Returns:
-        JavaScript string returning JSON {ok, error}
-    """
-    safe_e = _esc(event_id)
-    safe_b = _esc(bus_id)
-    return (
-        f"(function(){{"
-        f"var ev=studio.project.lookup('{safe_e}');"
-        f"if(!ev)return JSON.stringify({{ok:false,error:'Event not found'}});"
-        f"var bus=studio.project.lookup('{safe_b}');"
-        f"if(!bus)return JSON.stringify({{ok:false,error:'Bus not found'}});"
-        f"ev.masterTrack.mixerGroup.output.add(bus);"
-        f"return JSON.stringify({{ok:true,error:null}});"
-        f"}})();"
-    )
-
-
-def assign_event_to_bank(event_id: str, bank_id: str) -> str:
-    """
-    Generate JavaScript to add event to a bank (by GUID).
-
-    Args:
-        event_id: GUID of the event
-        bank_id: GUID of the bank
-
-    Returns:
-        JavaScript string returning JSON {ok, error}
-    """
-    safe_e = _esc(event_id)
-    safe_bk = _esc(bank_id)
-    return (
-        f"(function(){{"
-        f"var ev=studio.project.lookup('{safe_e}');"
-        f"if(!ev)return JSON.stringify({{ok:false,error:'Event not found'}});"
-        f"var bk=studio.project.lookup('{safe_bk}');"
-        f"if(!bk)return JSON.stringify({{ok:false,error:'Bank not found'}});"
-        f"bk.items.add(ev);"
-        f"return JSON.stringify({{ok:true,error:null}});"
-        f"}})();"
-    )

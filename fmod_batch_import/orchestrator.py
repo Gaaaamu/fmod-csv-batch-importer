@@ -1,13 +1,15 @@
 """
 Orchestrator for FMOD Batch Import.
 
-Drives the full CSV-to-FMOD import pipeline row by row:
-  resolve audio → pre-check bus/bank → import audio → create event
-  → add track → add sound → assign bus → assign bank → log result
+Drives the full CSV-to-FMOD import pipeline in two phases:
+
+  Phase 1 (Python): Parse CSV → normalize paths → resolve audio files.
+  Phase 2 (FMOD):   Send ONE batch JS call that processes all rows internally.
+                    Returns per-row results array (~2 TCP calls total).
 
 Rules:
-- If event_path already exists: skip row + warning
-- If bus/bank not found: skip row + warning (no event created)
+- If event_path already exists in FMOD: skip row
+- If bus/bank not found: warn + continue (no bus/bank assigned)
 - If TCP connection fails: abort entire batch
 - Any other row error: log failure, continue to next row
 """
@@ -16,30 +18,16 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
-import os
-from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
+from typing import cast
 
-from fmod_batch_import.csv_parser import CSVReader, CSVParseError
+from fmod_batch_import.csv_parser import CSVReader, CSVParseError, CSVRow
 from fmod_batch_import.audio_resolver import AudioResolver
 from fmod_batch_import.path_normalizer import PathNormalizer
 from fmod_batch_import.log_writer import LogWriter
-from fmod_batch_import.fmod_client import FMODClient
-from fmod_batch_import.js_builder import (
-    js_lookup,
-    js_create_event,
-    js_add_group_track,
-    js_add_sound,
-    js_import_audio,
-    js_assign_bus,
-    js_assign_bank,
-    js_save,
-)
-from fmod_batch_import.bus_bank_manager import lookup_bus, lookup_bank
-
-
-class FMODConnectionError(Exception):
-    """Raised when FMOD TCP connection is lost or unavailable."""
+from fmod_batch_import.fmod_client import FMODClient, FMODConnectionError
+from fmod_batch_import.js_builder import js_batch_process, js_save
+from fmod_batch_import.template_inspector import inspect_template_event
 
 
 @dataclass
@@ -57,7 +45,7 @@ class BatchSummary:
     skip: int = 0
     fail: int = 0
     total: int = 0
-    rows: list = field(default_factory=list)
+    rows: list[RowResult] = field(default_factory=list)
 
 
 class Orchestrator:
@@ -69,6 +57,7 @@ class Orchestrator:
         audio_dir: Directory to search for audio files.
         fmod_client: Connected FMODClient instance.
         log_writer: Optional LogWriter; if None, one is created next to CSV.
+        template_event_path: Optional template event path for bus/bank inheritance.
     """
 
     def __init__(
@@ -76,38 +65,161 @@ class Orchestrator:
         csv_path: str,
         audio_dir: str,
         fmod_client: FMODClient,
-        log_writer: Optional[LogWriter] = None,
+        log_writer: LogWriter | None = None,
+        template_event_path: str | None = None,
     ):
-        self.csv_path = csv_path
-        self.audio_dir = audio_dir
-        self.client = fmod_client
-        self.csv_dir = os.path.dirname(os.path.abspath(csv_path))
-        self.log_writer = log_writer or LogWriter(
+        self.csv_path: str = csv_path
+        self.audio_dir: str = audio_dir
+        self.client: FMODClient = fmod_client
+        csv_abs = Path(os.path.abspath(csv_path))
+        self.csv_dir: Path = csv_abs.parent
+        self.log_writer: LogWriter = log_writer or LogWriter(
             output_dir=self.csv_dir,
-            csv_filename=os.path.basename(csv_path),
+            csv_filename=csv_abs.name,
         )
-        self._csv_reader = CSVReader()
-        self._audio_resolver = AudioResolver(audio_dir)
-        self._path_normalizer = PathNormalizer()
+        
+        # Get template info for inheritance (bus/bank defaults)
+        template_bus_path = None
+        template_bank_name = None
+        if template_event_path:
+            template_info = inspect_template_event(fmod_client, template_event_path)
+            template_bus_path = template_info.bus_path
+            template_bank_name = template_info.bank_name
+            self.template_event_id: str | None = template_info.event_id
+        else:
+            self.template_event_id = None
+        
+        self._csv_reader: CSVReader = CSVReader()
+        self._audio_resolver: AudioResolver = AudioResolver(Path(str(audio_dir)))
+        self._path_normalizer: PathNormalizer = PathNormalizer(
+            audio_dir=str(audio_dir),
+            template_event_path=template_event_path,
+            template_bus_path=template_bus_path,
+            template_bank_name=template_bank_name,
+            event_folder_supported=True,  # js_ensure_folder_and_move auto-creates missing folders
+        )
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def run(self) -> BatchSummary:
-        """Execute the full batch import. Returns a BatchSummary."""
+        """Execute the full batch import. Returns a BatchSummary.
+
+        Two-phase approach:
+        1. Python preprocesses all rows (normalize paths, resolve audio files).
+        2. One TCP call sends a batch JS function covering all rows.
+           Per-row results (success/skip/fail + warnings) are returned as an array.
+        """
         summary = BatchSummary()
 
-        # Parse CSV
+        # --- Phase 0: Parse CSV ---
         try:
-            rows = self._csv_reader.read_file(self.csv_path)
+            rows: list[CSVRow] = self._csv_reader.read_file(self.csv_path)
         except (CSVParseError, FileNotFoundError) as exc:
             raise ValueError(f"CSV error: {exc}") from exc
 
         summary.total = len(rows)
 
+        # --- Phase 1: Python preprocessing ---
+        prepped_rows: list[dict[str, object]] = []  # rows ready for JS processing
+        all_results: list[RowResult] = []  # pre-failed rows (path/audio errors)
+
         for csv_row in rows:
-            result = self._process_row(csv_row)
+            idx = csv_row.row_index
+            audio_name = csv_row.audio_path.strip()
+            event_path_raw = csv_row.event_path.strip()
+            bank_name_original = csv_row.bank_name.strip()
+
+            # Normalize paths
+            try:
+                norm = self._path_normalizer.normalize_row(
+                    audio_path=audio_name,
+                    event_path=event_path_raw,
+                    asset_path=csv_row.asset_path.strip(),
+                    bus_path=csv_row.bus_path.strip(),
+                    bank_name=bank_name_original,
+                    row_index=idx,
+                )
+            except Exception as exc:
+                all_results.append(
+                    RowResult(idx, "fail", event_path_raw, audio_name, f"Path error: {exc}")
+                )
+                continue
+
+            # Resolve audio file (filesystem check in Python)
+            try:
+                audio_abs = self._audio_resolver.resolve(audio_name)
+            except FileNotFoundError as exc:
+                all_results.append(
+                    RowResult(idx, "fail", norm.event_path, audio_name, str(exc))
+                )
+                continue
+
+            # Compute asset relative path for setAssetPath()
+            asset_rel_path: str | None = None
+            try:
+                asset_rel_path = str(
+                    audio_abs.relative_to(Path(self.audio_dir))
+                ).replace("\\", "/")
+            except ValueError:
+                pass  # audio file outside audio_dir — import to Assets root
+
+            # Determine bank strategy:
+            # use_template_banks=True  → copy all banks from template event GUID
+            # use_template_banks=False + bank_name non-empty → assign specific bank
+            # both empty → no bank assignment
+            use_template_banks = (
+                bank_name_original == "" and self.template_event_id is not None
+            )
+
+            prepped_rows.append({
+                "row_index": idx,
+                "audio_abs_path": str(audio_abs).replace("\\", "/"),
+                "asset_rel_path": asset_rel_path,
+                "event_path": norm.event_path,
+                "audio_name": audio_name,
+                "bus_path": norm.bus_path,
+                "bank_name": norm.bank_name,
+                "use_template_banks": use_template_banks,
+                "folder_path": self._get_event_folder_path(norm.event_path),
+            })
+
+        # --- Phase 2: Single batch JS call ---
+        if prepped_rows:
+            try:
+                batch_result = self._exec(
+                    js_batch_process(prepped_rows, self.template_event_id)
+                )
+            except FMODConnectionError:
+                raise  # Abort entire batch on TCP failure
+
+            if not batch_result.get("ok"):
+                raise ValueError(
+                    f"Batch JS execution failed: {batch_result.get('error')}"
+                )
+
+            js_results_raw = batch_result.get("results", [])
+            if isinstance(js_results_raw, list):
+                for item in js_results_raw:
+                    if not isinstance(item, dict):
+                        continue
+                    row_idx_raw = item.get("row_index", 0)
+                    row_idx = row_idx_raw if isinstance(row_idx_raw, int) else 0
+                    status = str(item.get("status", "fail"))
+                    ep = str(item.get("event_path", ""))
+                    an = str(item.get("audio_name", ""))
+                    msg = str(item.get("message", ""))
+                    warnings_raw = item.get("warnings", [])
+                    all_results.append(RowResult(row_idx, status, ep, an, msg))
+                    if isinstance(warnings_raw, list):
+                        for w in warnings_raw:
+                            self.log_writer.add_warning(f"Row {row_idx}: {w}")
+
+        # --- Phase 3: Sort by row order, aggregate, and log ---
+        all_results.sort(key=lambda r: r.row_index)
+
+        for result in all_results:
             summary.rows.append(result)
             if result.status == "success":
                 summary.success += 1
@@ -124,27 +236,25 @@ class Orchestrator:
                 message=result.message,
             )
 
-        # Save project after all rows
+        # Save project (best-effort)
         try:
-            self._exec(js_save())
+            _ = self._exec(js_save())
         except FMODConnectionError:
-            pass  # Already handled per-row; save is best-effort
+            pass
 
-        self.log_writer.write()
+        _ = self.log_writer.write()
         return summary
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _exec(self, js: str) -> dict:
+    def _exec(self, js: str) -> dict[str, object]:
         """
         Execute JS via FMODClient and parse JSON response.
-        Raises FMODConnectionError on connection failure.
+        Raises FMODConnectionError on connection failure (propagated from FMODClient).
         """
         response = self.client.execute(js)
-        if response is None:
-            raise FMODConnectionError("FMOD TCP connection lost")
         # Extract JSON from out(): lines
         # FMOD response format: log(): ...\n\0out(): {json}\n\n\0
         match = re.search(r'out\(\):\s*(\{.*\})', response, re.DOTALL)
@@ -153,131 +263,20 @@ class Orchestrator:
         else:
             json_str = response.strip()
         try:
-            return json.loads(json_str)
+            data = cast(object, json.loads(json_str))
+            if isinstance(data, dict):
+                return cast(dict[str, object], data)
+            return {"ok": False, "error": "Non-dict JSON response"}
         except json.JSONDecodeError:
             return {"ok": False, "error": f"Non-JSON response: {response[:200]}"}
 
-    def _process_row(self, csv_row) -> RowResult:
-        """Process a single CSV row. Returns RowResult."""
-        idx = csv_row.row_index
-        event_path = csv_row.event_path.strip()
-        audio_name = csv_row.audio_path.strip()
-        asset_folder = csv_row.asset_path.strip()
-        bus_path = csv_row.bus_path.strip()
-        bank_name = csv_row.bank_name.strip()
+    @staticmethod
+    def _get_event_folder_path(event_path: str) -> str | None:
+        if "/" not in event_path:
+            return None
+        folder_path, _ = event_path.rsplit("/", 1)
+        if folder_path in ("event:", "event:/"):
+            return None
+        return folder_path
 
-        # Normalize paths
-        try:
-            norm = self._path_normalizer.normalize_row(
-                audio_path=audio_name,
-                event_path=event_path,
-                asset_path=asset_folder,
-                bus_path=bus_path,
-                bank_name=bank_name,
-                row_index=idx,
-            )
-            event_path = norm.event_path
-            bus_path = norm.bus_path
-            bank_name = norm.bank_name
-        except Exception as exc:
-            return RowResult(idx, "fail", event_path, audio_name, f"Path error: {exc}")
 
-        # --- Step 1: Check if event already exists ---
-        try:
-            lookup_result = self._exec(js_lookup(event_path))
-            if lookup_result.get("ok"):
-                return RowResult(idx, "skip", event_path, audio_name,
-                                 f"Event already exists: {event_path}")
-        except FMODConnectionError as exc:
-            raise  # Propagate to abort batch
-
-        # --- Step 2: Pre-check bus/bank ---
-        bus_id = None
-        bank_id = None
-
-        if bus_path:
-            try:
-                bus_result = self._exec(lookup_bus(bus_path))
-                if not bus_result.get("ok"):
-                    return RowResult(idx, "skip", event_path, audio_name,
-                                     f"Bus not found: {bus_path}")
-                bus_id = bus_result.get("bus_id")
-            except FMODConnectionError:
-                raise
-
-        if bank_name:
-            try:
-                bank_result = self._exec(lookup_bank(bank_name))
-                if not bank_result.get("ok"):
-                    return RowResult(idx, "skip", event_path, audio_name,
-                                     f"Bank not found: {bank_name}")
-                bank_id = bank_result.get("bank_id")
-            except FMODConnectionError:
-                raise
-
-        # --- Step 3: Resolve audio file ---
-        try:
-            audio_abs = self._audio_resolver.resolve(audio_name)
-        except FileNotFoundError as exc:
-            return RowResult(idx, "fail", event_path, audio_name, str(exc))
-
-        # --- Step 4: Import audio asset ---
-        try:
-            import_result = self._exec(js_import_audio(str(audio_abs)))
-            if not import_result.get("ok"):
-                return RowResult(idx, "fail", event_path, audio_name,
-                                 f"Audio import failed: {import_result.get('error')}")
-            asset_id = import_result.get("asset_id")
-        except FMODConnectionError:
-            raise
-
-        # --- Step 5: Create event ---
-        try:
-            create_result = self._exec(js_create_event(event_path))
-            if not create_result.get("ok"):
-                return RowResult(idx, "fail", event_path, audio_name,
-                                 f"Event create failed: {create_result.get('error')}")
-            event_id = create_result.get("id")
-        except FMODConnectionError:
-            raise
-
-        # --- Step 6: Add group track ---
-        try:
-            track_result = self._exec(js_add_group_track(event_id, "Audio"))
-            if not track_result.get("ok"):
-                return RowResult(idx, "fail", event_path, audio_name,
-                                 f"Track add failed: {track_result.get('error')}")
-            track_id = track_result.get("track_id")
-        except FMODConnectionError:
-            raise
-
-        # --- Step 7: Add sound ---
-        try:
-            sound_result = self._exec(js_add_sound(track_id, asset_id))
-            if not sound_result.get("ok"):
-                return RowResult(idx, "fail", event_path, audio_name,
-                                 f"Sound add failed: {sound_result.get('error')}")
-        except FMODConnectionError:
-            raise
-
-        # --- Step 8: Assign bus ---
-        if bus_id:
-            try:
-                bus_assign = self._exec(js_assign_bus(event_id, bus_id))
-                if not bus_assign.get("ok"):
-                    self.log_writer.add_warning(
-                        f"Row {idx}: Bus assign failed: {bus_assign.get('error')}")
-            except FMODConnectionError:
-                raise
-
-        # --- Step 9: Assign bank ---
-        if bank_id:
-            try:
-                bank_assign = self._exec(js_assign_bank(event_id, bank_id))
-                if not bank_assign.get("ok"):
-                    self.log_writer.add_warning(
-                        f"Row {idx}: Bank assign failed: {bank_assign.get('error')}")
-            except FMODConnectionError:
-                raise
-
-        return RowResult(idx, "success", event_path, audio_name, "OK")

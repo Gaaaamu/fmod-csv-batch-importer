@@ -217,8 +217,8 @@ class TestEmptyFieldValidation:
         assert "gunshot" in result.event_path
         assert "event_path default applied" in result.warnings[0]
     
-    def test_empty_optional_fields_get_defaults(self):
-        """Empty optional fields (bus, bank) should get defaults."""
+    def test_empty_optional_fields_stay_empty_without_template(self):
+        """Empty bus/bank with no template should remain empty (no auto-fill)."""
         result = self.normalizer.normalize_row(
             audio_path="sounds/gunshot.wav",
             event_path="event:/sfx/gunshot",
@@ -226,23 +226,12 @@ class TestEmptyFieldValidation:
             bank_name="",
             row_index=1
         )
-        
-        # Should get default bus and bank
-        assert result.bus_path == "bus:/"
-        assert result.bank_name == "bank:/Master"
-        assert any("bus_path fallback applied" in w for w in result.warnings)
-        assert any("bank_name fallback applied" in w for w in result.warnings)
-        """Empty event_path in row should raise validation error."""
-        with pytest.raises(PathValidationError) as exc_info:
-            self.normalizer.normalize_row(
-                audio_path="sounds/gunshot.wav",
-                event_path="",
-                row_index=10
-            )
-        
-        assert "cannot be empty" in str(exc_info.value)
-        assert "event_path" in str(exc_info.value)
-        assert "Row 10" in str(exc_info.value)
+
+        # No template configured → bus and bank stay empty, no fallback warnings
+        assert result.bus_path == ""
+        assert result.bank_name == ""
+        assert not any("bus_path" in w for w in result.warnings)
+        assert not any("bank_name" in w for w in result.warnings)
     
     def test_empty_optional_fields_allowed(self):
         """Empty optional fields (bus, bank) should be allowed."""
@@ -253,10 +242,6 @@ class TestEmptyFieldValidation:
             bank_name="",
             row_index=1
         )
-        
-        assert result.bus_path == ""
-        assert result.bank_name == ""
-
 
 class TestDisallowedCharacterDetection:
     """Test that disallowed characters are detected in paths."""
@@ -389,15 +374,22 @@ class TestRowMapping:
         assert result.bank_name == "bank:/Master"
     
     def test_row_preserves_warnings(self):
-        """Row should preserve warnings list."""
-        result = self.normalizer.normalize_row(
+        """Row should preserve warnings from template inheritance."""
+        normalizer = PathNormalizer(
+            template_bus_path="bus:/VO",
+            template_bank_name="bank:/Master",
+        )
+        result = normalizer.normalize_row(
             audio_path="/audio/test.wav",
             event_path="event:/test",
             row_index=0
         )
-        
+
         assert isinstance(result.warnings, list)
-        assert len(result.warnings) == 0
+        # Should have warnings for bus_path and bank_name inherited from template
+        assert len(result.warnings) == 2
+        assert any("bus_path inherited from template" in w for w in result.warnings)
+        assert any("bank_name inherited from template" in w for w in result.warnings)
 
 
 class TestValidatePrefix:
