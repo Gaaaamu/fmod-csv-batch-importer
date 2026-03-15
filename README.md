@@ -25,7 +25,7 @@
 ### 环境要求
 
 - Python 3.10+
-- FMOD Studio 2.02+（需开启脚本服务器）
+- FMOD Studio 2.02+（脚本服务器随软件自动启动）
 
 ### 安装
 
@@ -40,9 +40,11 @@ pip install pytest pytest-cov
 
 ### 使用方法
 
-#### 1. 开启 FMOD Studio 脚本服务器
+#### 1. 确认 FMOD Studio 脚本服务器已就绪
 
-在 FMOD Studio 中：`Edit → Preferences → Scripting → Enable Scripting` ✓
+FMOD Studio 启动时会**自动开启** TCP 脚本服务器（端口 3663），无需手动开关。
+
+验证方式：在 FMOD Studio 中打开 `Window → Console`（快捷键 `Ctrl+0`），若顶部显示 `Connected to FMOD Studio on 127.0.0.1:3663`，则表示服务器已正常运行。
 
 #### 2. 准备 CSV 文件
 
@@ -169,7 +171,7 @@ A tool for batch-importing audio events into FMOD Studio from a CSV file. It com
 ### Requirements
 
 - Python 3.10+
-- FMOD Studio 2.02+ (with scripting server enabled)
+- FMOD Studio 2.02+ (scripting server starts automatically)
 
 ### Installation
 
@@ -183,9 +185,11 @@ pip install pytest pytest-cov
 
 ### Usage
 
-#### 1. Enable the FMOD Studio scripting server
+#### 1. Confirm the FMOD Studio scripting server is ready
 
-In FMOD Studio: `Edit → Preferences → Scripting → Enable Scripting` ✓
+FMOD Studio **automatically starts** the TCP scripting server (port 3663) on launch — no manual toggle required.
+
+To verify: open `Window → Console` (shortcut `Ctrl+0`) in FMOD Studio. If the header shows `Connected to FMOD Studio on 127.0.0.1:3663`, the server is running and ready.
 
 #### 2. Prepare a CSV file
 
