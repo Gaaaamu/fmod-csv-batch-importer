@@ -33,10 +33,9 @@ class FMODClient:
         sock = self._socket
         assert sock is not None  # guaranteed by connect() above
         try:
-            sock.settimeout(3.0)
+            sock.settimeout(30.0)
             sock.sendall(js_code.encode("utf-8"))
             chunks = []
-            total_nulls = 0
             while True:
                 try:
                     chunk = sock.recv(4096)
@@ -45,8 +44,12 @@ class FMODClient:
                 if not chunk:
                     break
                 chunks.append(chunk)
-                total_nulls += chunk.count(b'\0')
-                if total_nulls >= 2:
+                # Stop only when a complete out(): packet has arrived.
+                # FMOD may emit multiple log(): packets before out():; counting
+                # null bytes would stop too early and lose the JSON response.
+                current = b"".join(chunks)
+                out_idx = current.find(b"out():")
+                if out_idx != -1 and b"\x00" in current[out_idx:]:
                     break
             sock.settimeout(None)
             response = b''.join(chunks)

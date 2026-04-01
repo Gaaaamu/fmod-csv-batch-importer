@@ -73,6 +73,62 @@ class TestFMODClient(unittest.TestCase):
         self.assertIsNotNone(result)
 
     @patch("socket.create_connection")
+    def test_execute_multiple_log_lines_before_out(self, mock_create_connection):
+        """Multiple log(): packets before out(): must not cause early termination.
+
+        This guards against the bug where total_nulls >= 2 fires on the second
+        log() packet, stopping the read loop before out(): is received.
+        """
+        mock_socket = MagicMock()
+        mock_create_connection.return_value = mock_socket
+        # FMOD emits 3 log() messages then the out() JSON — all in one recv chunk
+        payload = (
+            b"log(): importing audio\x00"
+            b"log(): creating event\x00"
+            b"log(): assigning bank\x00"
+            b'out(): {"ok":true,"results":[]}\x00'
+        )
+        mock_socket.recv.side_effect = [payload, socket.timeout()]
+
+        self.client.connect()
+        result = self.client.execute("js_code")
+
+        self.assertIn("out():", result)
+        self.assertIn('"ok":true', result)
+
+    @patch("socket.create_connection")
+    def test_execute_out_arrives_in_later_chunk(self, mock_create_connection):
+        """out(): arriving in a later recv chunk is still collected correctly."""
+        mock_socket = MagicMock()
+        mock_create_connection.return_value = mock_socket
+        # First chunk: two log() packets; second chunk: the out() packet
+        mock_socket.recv.side_effect = [
+            b"log(): msg1\x00log(): msg2\x00",
+            b'out(): {"ok":true}\x00',
+            socket.timeout(),
+        ]
+
+        self.client.connect()
+        result = self.client.execute("js_code")
+
+        self.assertIn("out():", result)
+        self.assertIn('"ok":true', result)
+
+    @patch("socket.create_connection")
+    def test_execute_timeout_without_out_returns_partial(self, mock_create_connection):
+        """If out(): never arrives, the read loop exits on timeout with partial data."""
+        mock_socket = MagicMock()
+        mock_create_connection.return_value = mock_socket
+        mock_socket.recv.side_effect = [b"log(): something\x00", socket.timeout()]
+
+        self.client.connect()
+        result = self.client.execute("js_code")
+
+        # Partial response — no out(): present
+        self.assertNotIn("out():", result)
+        self.assertIn("log(): something", result)
+
+    @patch("socket.create_connection")
     def test_close_closes_socket(self, mock_create_connection):
         """Test that close calls socket.close() and clears the socket reference."""
         mock_socket = MagicMock()
